@@ -45,17 +45,17 @@ export function EmailReportDialog({ report, open, onOpenChange }: EmailReportDia
     }
     setSending(true);
     try {
-      const result = await emailLearnerReportPdf({
+      await emailLearnerReportPdf({
         to,
         report,
         message: message.trim() || undefined
       });
-      toast.success(`PDF report queued to ${to}`, {
-        description: `${result.filename} will be sent when email delivery is connected.`
-      });
+      toast.success(`PDF report sent to ${to}`);
       handleOpenChange(false);
-    } catch {
-      toast.error("Could not prepare the report email. Please try again.");
+    } catch (error) {
+      const messageText =
+        error instanceof Error ? error.message : "Could not send the report email. Please try again.";
+      toast.error(messageText);
     } finally {
       setSending(false);
     }
