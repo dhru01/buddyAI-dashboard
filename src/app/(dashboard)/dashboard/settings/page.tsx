@@ -1,3 +1,4 @@
+import { AccountLogoutSection } from "@/components/settings/account-logout-section";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -6,6 +7,7 @@ export default function SettingsPage() {
   return (
     <div className="space-y-4">
       <h2 className="text-2xl font-semibold">System Configuration</h2>
+      <AccountLogoutSection />
       <div className="grid gap-4 lg:grid-cols-2">
         {[
           "Supported Languages",

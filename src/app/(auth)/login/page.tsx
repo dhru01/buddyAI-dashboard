@@ -21,9 +21,12 @@ import { cn } from "@/lib/utils";
 const REMEMBER_EMAIL_KEY = "buddyai_staff_remember_email";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+type AuthMode = "signin" | "signup";
+
 type FieldErrors = {
   email?: string;
   password?: string;
+  confirmPassword?: string;
   resetEmail?: string;
 };
 
@@ -34,8 +37,17 @@ function validateEmail(value: string): string | undefined {
   return undefined;
 }
 
-function validatePassword(value: string): string | undefined {
+function validatePassword(value: string, forSignup = false): string | undefined {
   if (!value) return "Password is required.";
+  if (forSignup && value.length < 8) {
+    return "Password must be at least 8 characters.";
+  }
+  return undefined;
+}
+
+function validateConfirmPassword(password: string, confirmPassword: string): string | undefined {
+  if (!confirmPassword) return "Please confirm your password.";
+  if (password !== confirmPassword) return "Passwords do not match.";
   return undefined;
 }
 
@@ -61,15 +73,33 @@ function mapResetError(message: string): string {
   return "Unable to send a reset email right now. Please try again.";
 }
 
+function mapSignUpError(message: string): string {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("already registered") || normalized.includes("already exists")) {
+    return "An account with this email already exists. Try signing in instead.";
+  }
+  if (normalized.includes("password")) {
+    return "Choose a stronger password with at least 8 characters.";
+  }
+  if (normalized.includes("too many requests")) {
+    return "Too many sign-up attempts. Please wait a moment and try again.";
+  }
+  return "Unable to create your account right now. Please try again.";
+}
+
 export default function LoginPage() {
   const router = useRouter();
+  const [mode, setMode] = useState<AuthMode>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
+  const [signupSuccess, setSignupSuccess] = useState<string | null>(null);
 
   const [resetOpen, setResetOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
@@ -103,26 +133,74 @@ export default function LoginPage() {
     setFieldErrors((prev) => ({ ...prev, resetEmail: undefined }));
   };
 
+  const switchMode = (nextMode: AuthMode) => {
+    if (loading) return;
+    setMode(nextMode);
+    setFormError(null);
+    setSignupSuccess(null);
+    setConfirmPassword("");
+    setFieldErrors({});
+  };
+
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (loading) return;
 
+    const isSignup = mode === "signup";
     const emailError = validateEmail(email);
-    const passwordError = validatePassword(password);
+    const passwordError = validatePassword(password, isSignup);
+    const confirmPasswordError = isSignup
+      ? validateConfirmPassword(password, confirmPassword)
+      : undefined;
     const nextErrors: FieldErrors = {};
 
     if (emailError) nextErrors.email = emailError;
     if (passwordError) nextErrors.password = passwordError;
+    if (confirmPasswordError) nextErrors.confirmPassword = confirmPasswordError;
 
     setFieldErrors(nextErrors);
     setFormError(null);
+    setSignupSuccess(null);
 
-    if (emailError || passwordError) return;
+    if (emailError || passwordError || confirmPasswordError) return;
 
     setLoading(true);
 
     try {
       const supabase = createClient();
+
+      if (isSignup) {
+        const emailRedirectTo =
+          typeof window !== "undefined" ? `${window.location.origin}/login` : undefined;
+
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: { emailRedirectTo }
+        });
+
+        if (error) {
+          setFormError(mapSignUpError(error.message));
+          return;
+        }
+
+        if (data.session) {
+          toast.success("Account created");
+          router.push("/dashboard");
+          router.refresh();
+          return;
+        }
+
+        setSignupSuccess(
+          `Account created for ${email.trim()}. Check your inbox to confirm your email, then sign in.`
+        );
+        toast.success("Check your email to confirm your account");
+        setPassword("");
+        setConfirmPassword("");
+        setMode("signin");
+        return;
+      }
+
       const { error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password
@@ -147,7 +225,11 @@ export default function LoginPage() {
       router.push("/dashboard");
       router.refresh();
     } catch {
-      setFormError("Unable to sign in right now. Please try again.");
+      setFormError(
+        isSignup
+          ? "Unable to create your account right now. Please try again."
+          : "Unable to sign in right now. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -206,13 +288,26 @@ export default function LoginPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">
             BuddyAI Staff
           </p>
-          <h1 className="mt-2 text-2xl font-semibold text-foreground">Sign in to your account</h1>
+          <h1 className="mt-2 text-2xl font-semibold text-foreground">
+            {mode === "signin" ? "Sign in to your account" : "Create your account"}
+          </h1>
           <p className="mt-2 text-sm text-foreground/65">
-            Access is restricted to authorised BuddyAI staff.
+            {mode === "signin"
+              ? "Access is restricted to authorised BuddyAI staff."
+              : "Register with your staff email to access the BuddyAI admin portal."}
           </p>
         </div>
 
         <form className="space-y-5" onSubmit={onSubmit} noValidate>
+          {signupSuccess ? (
+            <div
+              role="status"
+              className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm text-foreground"
+            >
+              {signupSuccess}
+            </div>
+          ) : null}
+
           {formError ? (
             <div
               role="alert"
@@ -260,14 +355,19 @@ export default function LoginPage() {
                 id="password"
                 name="password"
                 type={showPassword ? "text" : "password"}
-                autoComplete="current-password"
+                autoComplete={mode === "signup" ? "new-password" : "current-password"}
                 value={password}
                 onChange={(event) => {
                   setPassword(event.target.value);
-                  setFieldErrors((prev) => ({ ...prev, password: undefined }));
+                  setFieldErrors((prev) => ({
+                    ...prev,
+                    password: undefined,
+                    confirmPassword: undefined
+                  }));
                   setFormError(null);
+                  setSignupSuccess(null);
                 }}
-                placeholder="Enter your password"
+                placeholder={mode === "signup" ? "Create a password (min. 8 characters)" : "Enter your password"}
                 aria-invalid={Boolean(fieldErrors.password)}
                 aria-describedby={fieldErrors.password ? "password-error" : undefined}
                 disabled={loading}
@@ -293,26 +393,79 @@ export default function LoginPage() {
             ) : null}
           </div>
 
-          <div className="flex items-center justify-between gap-3">
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground/80">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(event) => setRememberMe(event.target.checked)}
+          {mode === "signup" ? (
+            <div className="space-y-2">
+              <label htmlFor="confirm-password" className="text-sm font-medium text-foreground">
+                Confirm password
+              </label>
+              <div className="relative">
+                <Input
+                  id="confirm-password"
+                  name="confirm-password"
+                  type={showConfirmPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(event) => {
+                    setConfirmPassword(event.target.value);
+                    setFieldErrors((prev) => ({ ...prev, confirmPassword: undefined }));
+                    setFormError(null);
+                    setSignupSuccess(null);
+                  }}
+                  placeholder="Re-enter your password"
+                  aria-invalid={Boolean(fieldErrors.confirmPassword)}
+                  aria-describedby={
+                    fieldErrors.confirmPassword ? "confirm-password-error" : undefined
+                  }
+                  disabled={loading}
+                  className={cn(
+                    "pr-11",
+                    fieldErrors.confirmPassword && "border-red-300 focus:border-red-400"
+                  )}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword((current) => !current)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md text-foreground/50 transition hover:text-foreground"
+                  aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                  disabled={loading}
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+              {fieldErrors.confirmPassword ? (
+                <p id="confirm-password-error" className="text-sm text-red-600">
+                  {fieldErrors.confirmPassword}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {mode === "signin" ? (
+            <div className="flex items-center justify-between gap-3">
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground/80">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(event) => setRememberMe(event.target.checked)}
+                  disabled={loading}
+                  className="h-4 w-4 rounded border-border text-primary accent-primary"
+                />
+                Remember me
+              </label>
+              <button
+                type="button"
+                onClick={openResetDialog}
                 disabled={loading}
-                className="h-4 w-4 rounded border-border text-primary accent-primary"
-              />
-              Remember me
-            </label>
-            <button
-              type="button"
-              onClick={openResetDialog}
-              disabled={loading}
-              className="text-sm font-medium text-foreground underline-offset-4 transition hover:text-primary hover:underline disabled:opacity-50"
-            >
-              Forgot password?
-            </button>
-          </div>
+                className="text-sm font-medium text-foreground underline-offset-4 transition hover:text-primary hover:underline disabled:opacity-50"
+              >
+                Forgot password?
+              </button>
+            </div>
+          ) : null}
 
           <Button
             type="submit"
@@ -323,12 +476,42 @@ export default function LoginPage() {
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Signing in...
+                {mode === "signup" ? "Creating account..." : "Signing in..."}
               </>
+            ) : mode === "signup" ? (
+              "Create account"
             ) : (
               "Sign in"
             )}
           </Button>
+
+          <p className="text-center text-sm text-foreground/70">
+            {mode === "signin" ? (
+              <>
+                Don&apos;t have an account?{" "}
+                <button
+                  type="button"
+                  onClick={() => switchMode("signup")}
+                  disabled={loading}
+                  className="font-medium text-foreground underline-offset-4 transition hover:text-primary hover:underline disabled:opacity-50"
+                >
+                  Create one
+                </button>
+              </>
+            ) : (
+              <>
+                Already have an account?{" "}
+                <button
+                  type="button"
+                  onClick={() => switchMode("signin")}
+                  disabled={loading}
+                  className="font-medium text-foreground underline-offset-4 transition hover:text-primary hover:underline disabled:opacity-50"
+                >
+                  Sign in
+                </button>
+              </>
+            )}
+          </p>
         </form>
       </Card>
 
