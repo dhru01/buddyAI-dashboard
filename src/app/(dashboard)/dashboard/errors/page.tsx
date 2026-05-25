@@ -19,38 +19,34 @@ export default function ErrorsPage() {
   const { errorLogs, resolveErrorLog, assignStaff } = useErrorLogs();
   const [reviewConversationId, setReviewConversationId] = useState<string | null>(null);
 
-  const openIssues = errorLogs.filter((e) => e.status === "new" || e.status === "in review");
-
-  const reviewConversation = useMemo(
-    () =>
-      reviewConversationId
-        ? conversations.find((c) => c.id === reviewConversationId)
-        : undefined,
-    [conversations, reviewConversationId]
+  const openIssues = errorLogs.filter(
+    (error) => error.status === "new" || error.status === "in review"
   );
+
+  const reviewConversation = useMemo(() => {
+    if (!reviewConversationId) return undefined;
+
+    return conversations.find(
+      (conversation) => conversation.id === reviewConversationId
+    );
+  }, [conversations, reviewConversationId]);
 
   const openConversationReview = (error: ErrorLog) => {
     const conversationId = resolveConversationIdForError(error, conversations);
-    if (conversationId) setReviewConversationId(conversationId);
+
+    if (conversationId) {
+      setReviewConversationId(conversationId);
+    }
   };
 
   return (
     <div className="space-y-4">
       <h2 className="text-2xl font-semibold">Error and Fallback Monitor</h2>
+
       <DataTable
         title="Issues Queue"
         leftColumns={[0]}
         centerColumns={[1, 2, 3, 4, 5, 6]}
-        columnWidths={[
-          "w-[13%]",
-          "w-[9%]",
-          "w-[12%]",
-          "w-[18%]",
-          "w-[8%]",
-          "w-[12%]",
-          "w-[20%]",
-          "w-[14%]"
-        ]}
         headers={[
           "Learner",
           "Date/Time",
@@ -59,43 +55,55 @@ export default function ErrorsPage() {
           "Status",
           "Assigned Staff",
           "Internal Notes",
-          "Actions"
+          "Actions",
         ]}
-        rows={openIssues.map((e) => {
-          const conversationId = resolveConversationIdForError(e, conversations);
-          const isReviewing = conversationId != null && conversationId === reviewConversationId;
+        rows={openIssues.map((error) => {
+          const conversationId = resolveConversationIdForError(
+            error,
+            conversations
+          );
+
+          const isReviewing =
+            conversationId !== null && conversationId === reviewConversationId;
 
           return [
-            e.learner,
-            <ErrorLogDateTimeCell key={`${e.id}-datetime`} timestamp={e.timestamp} />,
-            e.errorType,
-            e.snippet,
-            <StatusBadge key={e.id} status={e.status} />,
-            <AssignedStaffSelect
-              key={`${e.id}-staff`}
-              value={e.assignedStaff}
-              onChange={(staff) => assignStaff(e.id, staff)}
+            error.learner,
+            <ErrorLogDateTimeCell
+              key={`${error.id}-datetime`}
+              timestamp={error.timestamp}
             />,
-            formatErrorLogInternalNotes(e.internalNotes),
-            <div key={`${e.id}-actions`} className="flex justify-center gap-2">
+            error.errorType,
+            error.snippet,
+            <StatusBadge key={`${error.id}-status`} status={error.status} />,
+            <AssignedStaffSelect
+              key={`${error.id}-staff`}
+              value={error.assignedStaff}
+              onChange={(staff) => assignStaff(error.id, staff)}
+            />,
+            formatErrorLogInternalNotes(error.internalNotes),
+            <div key={`${error.id}-actions`} className="flex justify-center gap-2">
               <Button
                 type="button"
                 variant={isReviewing ? "default" : "outline"}
-                onClick={() => openConversationReview(e)}
+                onClick={() => openConversationReview(error)}
                 disabled={!conversationId}
               >
                 {isReviewing ? "Reviewing" : "Review"}
               </Button>
+
               <Button
                 type="button"
                 onClick={() => {
-                  if (isReviewing) setReviewConversationId(null);
-                  resolveErrorLog(e.id);
+                  if (isReviewing) {
+                    setReviewConversationId(null);
+                  }
+
+                  resolveErrorLog(error.id);
                 }}
               >
                 Resolve
               </Button>
-            </div>
+            </div>,
           ];
         })}
       />
@@ -106,10 +114,16 @@ export default function ErrorsPage() {
             <h3 className="text-base font-semibold">
               Conversation — {reviewConversation.learnerName}
             </h3>
-            <Button type="button" variant="outline" onClick={() => setReviewConversationId(null)}>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setReviewConversationId(null)}
+            >
               Close
             </Button>
           </div>
+
           <ConversationThreadView conversationId={reviewConversationId} />
         </Card>
       ) : null}
