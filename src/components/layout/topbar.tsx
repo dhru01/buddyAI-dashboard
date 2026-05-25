@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { Input } from "@/components/ui/input";
 
 export function Topbar() {
@@ -16,12 +17,15 @@ export function Topbar() {
     pathname === "/dashboard/generate-report";
 
   return (
-    <header className="flex items-center justify-between bg-background px-6 py-4">
+    <header className="flex items-center justify-between gap-4 bg-background px-6 py-4">
       {!hideSearch ? (
         <div className="w-full max-w-sm">
           <Input placeholder="Search learners, conversations, errors..." />
         </div>
-      ) : null}
+      ) : (
+        <div className="flex-1" />
+      )}
+      <ThemeToggle />
     </header>
   );
 }

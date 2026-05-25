@@ -25,13 +25,13 @@ export default function OverviewPage() {
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <h2 className="text-2xl font-semibold">Overview</h2>
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-foreground/65">
             Real-time monitoring for Buddy Learning learners and AI tutor performance.
           </p>
         </div>
         <select
           aria-label="Select stats time period"
-          className="h-10 min-w-48 rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary"
+          className="h-10 min-w-48 rounded-xl border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary"
           value={period}
           onChange={(e) => setPeriod(e.target.value as OverviewPeriod)}
         >
@@ -47,7 +47,7 @@ export default function OverviewPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {periodData.kpis.map((kpi) => (
           <Card key={kpi.label}>
-            <p className="text-sm text-gray-500">{kpi.label}</p>
+            <p className="text-sm text-foreground/60">{kpi.label}</p>
             <p className="mt-2 text-2xl font-semibold">{kpi.value}</p>
             <p className={`mt-1 text-xs font-medium ${trendColor(kpi.trend)}`}>
               {kpi.trend} vs last period

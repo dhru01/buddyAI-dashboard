@@ -61,7 +61,7 @@ export function BarChartCard({
   }) => {
     if (!active || !payload?.length) return null;
     return (
-      <div className="rounded-md border border-border bg-white p-3 text-sm shadow-soft">
+      <div className="rounded-md border border-border bg-card p-3 text-sm shadow-soft">
         <p className="font-medium">{label}</p>
         <p className="text-primary">Learners: {payload[0]?.value}</p>
       </div>

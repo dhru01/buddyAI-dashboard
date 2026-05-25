@@ -22,7 +22,7 @@ export function AssignedStaffSelect({ value, onChange, className }: AssignedStaf
       value={selectValue}
       onChange={(e) => onChange(e.target.value)}
       className={cn(
-        "mx-auto block h-9 min-w-[8.5rem] max-w-full rounded-xl border border-border bg-white px-2 text-sm outline-none focus:border-primary",
+        "mx-auto block h-9 min-w-[8.5rem] max-w-full rounded-xl border border-border bg-card px-2 text-sm text-foreground outline-none focus:border-primary",
         className
       )}
     >

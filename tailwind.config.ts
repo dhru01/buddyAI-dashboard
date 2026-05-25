@@ -6,13 +6,13 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "#fffefb",
-        foreground: "#141414",
-        card: "#ffffff",
-        muted: "#f7f7f5",
-        border: "#ece8dd",
+        background: "var(--background)",
+        foreground: "var(--foreground)",
+        card: "var(--card)",
+        muted: "var(--muted)",
+        border: "var(--border)",
         primary: "#f7b500",
-        secondary: "#141414",
+        secondary: "var(--secondary)",
         accent: "#ffcf4d"
       },
       borderRadius: {
@@ -20,7 +20,7 @@ const config: Config = {
         "2xl": "1.25rem"
       },
       boxShadow: {
-        soft: "0 6px 24px rgba(20, 20, 20, 0.08)"
+        soft: "var(--shadow-soft)"
       }
     }
   },

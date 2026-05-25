@@ -223,7 +223,7 @@ export function LearnerProfileClient({ learner }: { learner: Learner }) {
                 <select
                   value={draft.status}
                   onChange={(e) => patch("status", e.target.value as LearnerStatus)}
-                  className="h-9 w-full min-w-0 rounded-xl border border-border bg-white px-3 text-sm font-normal outline-none focus:border-primary"
+                  className="h-9 w-full min-w-0 rounded-xl border border-border bg-card px-3 text-sm font-normal text-foreground outline-none focus:border-primary"
                 >
                   {LEARNER_STATUS_OPTIONS.map((s) => (
                     <option key={s} value={s}>

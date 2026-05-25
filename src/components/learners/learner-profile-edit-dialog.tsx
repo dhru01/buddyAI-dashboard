@@ -177,7 +177,7 @@ export function LearnerProfileEditDialog({
                     id="profile-status"
                     value={draft.status}
                     onChange={(e) => patch("status", e.target.value as LearnerStatus)}
-                    className="h-10 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary"
+                    className="h-10 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary"
                   >
                     {LEARNER_STATUS_OPTIONS.map((s) => (
                       <option key={s} value={s}>

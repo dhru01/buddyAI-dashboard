@@ -25,7 +25,7 @@ export function DatePeriodSelect({ value, onChange, className }: DatePeriodSelec
       value={value}
       onChange={(e) => onChange(e.target.value as ConversationDatePeriod)}
       className={cn(
-        "h-10 w-full rounded-xl border border-border bg-white px-3 text-sm outline-none focus:border-primary",
+        "h-10 w-full rounded-xl border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-primary",
         !value && "text-foreground/50",
         className
       )}
