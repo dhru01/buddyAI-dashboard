@@ -98,11 +98,14 @@ function mapSignUpError(message: string): string {
   if (normalized.includes("already registered") || normalized.includes("already exists")) {
     return "An account with this email already exists. Try signing in instead.";
   }
+  if (normalized.includes("rate limit") || normalized.includes("too many requests")) {
+    return "Too many verification emails were sent. Please wait a few minutes and try again.";
+  }
+  if (normalized.includes("error sending") || normalized.includes("confirmation email")) {
+    return "We could not send the verification email. Check Supabase email settings or try again later.";
+  }
   if (normalized.includes("password")) {
     return "Choose a stronger password with at least 8 characters.";
-  }
-  if (normalized.includes("too many requests")) {
-    return "Too many sign-up attempts. Please wait a moment and try again.";
   }
   return "Unable to create your account right now. Please try again.";
 }
