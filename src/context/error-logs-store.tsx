@@ -2,8 +2,10 @@
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 import { format } from "date-fns";
+import { toast } from "sonner";
 import { errorLogs as seedErrorLogs } from "@/lib/mock-data";
-import { UNASSIGNED_STAFF } from "@/lib/issue-queue-staff";
+import { createClient } from "@/lib/supabase/client";
+import { persistErrorLogStaffAssignment } from "@/lib/staff-members/persist-assignment";
 import type { Conversation, ErrorLog } from "@/lib/types";
 
 type ErrorLogsContextValue = {
@@ -12,7 +14,7 @@ type ErrorLogsContextValue = {
   flagConversation: (conversation: Conversation) => boolean;
   unflagConversation: (conversationId: string) => boolean;
   resolveErrorLog: (errorLogId: string) => void;
-  assignStaff: (errorLogId: string, staff: string) => void;
+  assignStaff: (errorLogId: string, staffMemberId: string | null) => void;
 };
 
 const ErrorLogsContext = createContext<ErrorLogsContextValue | null>(null);
@@ -38,7 +40,7 @@ function buildErrorFromConversation(conversation: Conversation): ErrorLog {
     errorType: conversation.fallback ? "Fallback response" : "Flagged conversation",
     snippet: conversation.snippet,
     status: "new",
-    assignedStaff: UNASSIGNED_STAFF,
+    assignedStaffId: null,
     internalNotes: "Flagged from Conversation Viewer."
   };
 }
@@ -87,10 +89,22 @@ export function ErrorLogsProvider({ children }: { children: ReactNode }) {
     setErrorLogs((prev) => prev.filter((e) => e.id !== errorLogId));
   }, []);
 
-  const assignStaff = useCallback((errorLogId: string, staff: string) => {
+  const assignStaff = useCallback((errorLogId: string, staffMemberId: string | null) => {
     setErrorLogs((prev) =>
-      prev.map((e) => (e.id === errorLogId ? { ...e, assignedStaff: staff } : e))
+      prev.map((e) =>
+        e.id === errorLogId ? { ...e, assignedStaffId: staffMemberId } : e
+      )
     );
+
+    void (async () => {
+      try {
+        const supabase = createClient();
+        await persistErrorLogStaffAssignment(supabase, errorLogId, staffMemberId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Assignment could not be saved.";
+        toast.error(message);
+      }
+    })();
   }, []);
 
   const value = useMemo(

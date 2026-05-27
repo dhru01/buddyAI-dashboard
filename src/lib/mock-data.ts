@@ -1,3 +1,4 @@
+import { SEED_STAFF_MEMBER_IDS } from "@/lib/staff-members/constants";
 import { Conversation, ErrorLog, Learner, Message } from "@/lib/types";
 
 export const kpis = [
@@ -209,7 +210,7 @@ export const errorLogs: ErrorLog[] = [
     errorType: "Fallback response",
     snippet: "Low confidence in figurative language answer",
     status: "new",
-    assignedStaff: "Unassigned",
+    assignedStaffId: null,
     internalNotes: "Review curriculum alignment."
   },
   {
@@ -220,7 +221,7 @@ export const errorLogs: ErrorLog[] = [
     errorType: "Repeated learner confusion",
     snippet: "Debtors ledger flow repeatedly misunderstood",
     status: "in review",
-    assignedStaff: "I. Rana",
+    assignedStaffId: SEED_STAFF_MEMBER_IDS.ibrahimRana,
     internalNotes: "Add simpler bilingual walkthrough."
   }
 ];

@@ -74,7 +74,8 @@ export interface ErrorLog {
   errorType: string;
   snippet: string;
   status: ReviewStatus;
-  assignedStaff: string;
+  /** staff_members.id; null means unassigned */
+  assignedStaffId: string | null;
   internalNotes: string;
   /** Links a queue row to a conversation when flagged from Conversation Viewer */
   conversationId?: string;

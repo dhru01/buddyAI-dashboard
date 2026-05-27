@@ -77,8 +77,8 @@ export default function ErrorsPage() {
             <StatusBadge key={`${error.id}-status`} status={error.status} />,
             <AssignedStaffSelect
               key={`${error.id}-staff`}
-              value={error.assignedStaff}
-              onChange={(staff) => assignStaff(error.id, staff)}
+              value={error.assignedStaffId}
+              onChange={(staffMemberId) => assignStaff(error.id, staffMemberId)}
             />,
             formatErrorLogInternalNotes(error.internalNotes),
             <div key={`${error.id}-actions`} className="flex justify-center gap-2">
