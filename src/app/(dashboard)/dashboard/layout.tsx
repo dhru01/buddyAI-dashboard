@@ -1,13 +1,24 @@
+import { redirect } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { DashboardProviders } from "@/components/providers/dashboard-providers";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { createClient } from "@/lib/supabase/server";
 
 export default async function DashboardLayout({
   children
 }: {
   children: React.ReactNode;
 }) {
+  const supabase = createClient();
+  const {
+    data: { user }
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
   return (
     <DashboardProviders>
       <ThemeProvider>
