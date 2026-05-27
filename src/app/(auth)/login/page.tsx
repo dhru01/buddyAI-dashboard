@@ -32,6 +32,7 @@ const REMEMBER_EMAIL_KEY = "buddyai_staff_remember_email";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type AuthMode = "signin" | "signup";
+type SignupStep = "details" | "otp";
 
 type FieldErrors = {
   firstName?: string;
@@ -39,6 +40,7 @@ type FieldErrors = {
   email?: string;
   password?: string;
   confirmPassword?: string;
+  otp?: string;
   newPassword?: string;
   newConfirmPassword?: string;
   resetEmail?: string;
@@ -70,6 +72,13 @@ function validateConfirmPassword(password: string, confirmPassword: string): str
   return undefined;
 }
 
+function validateOtp(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return "Verification code is required.";
+  if (!/^\d{6}$/.test(trimmed)) return "Enter the 6-digit code from your email.";
+  return undefined;
+}
+
 function mapSignInError(message: string): string {
   const normalized = message.toLowerCase();
   if (normalized.includes("invalid login credentials")) {
@@ -98,12 +107,29 @@ function mapSignUpError(message: string): string {
     return "An account with this email already exists. Try signing in instead.";
   }
   if (normalized.includes("rate limit") || normalized.includes("too many requests")) {
-    return "Too many sign-up attempts. Please wait a few minutes and try again.";
+    return "Too many verification emails were sent. Please wait a few minutes and try again.";
+  }
+  if (normalized.includes("error sending") || normalized.includes("confirmation email")) {
+    return "We could not send the verification email. Check Supabase email settings or try again later.";
   }
   if (normalized.includes("password")) {
     return PASSWORD_REQUIREMENTS_ERROR;
   }
   return "Unable to create your account right now. Please try again.";
+}
+
+function mapVerifyOtpError(message: string): string {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("expired")) {
+    return "This verification code has expired. Request a new one.";
+  }
+  if (normalized.includes("invalid") || normalized.includes("token")) {
+    return "Invalid verification code. Please check the code and try again.";
+  }
+  if (normalized.includes("too many requests")) {
+    return "Too many attempts. Please wait a moment and try again.";
+  }
+  return "Unable to verify your email right now. Please try again.";
 }
 
 function mapUpdatePasswordError(message: string): string {
@@ -127,15 +153,18 @@ function getPasswordResetRedirectUrl(): string | undefined {
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<AuthMode>("signin");
+  const [signupStep, setSignupStep] = useState<SignupStep>("details");
   const [firstName, setFirstName] = useState("");
   const [surname, setSurname] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [otpCode, setOtpCode] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resendOtpLoading, setResendOtpLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -263,13 +292,23 @@ export default function LoginPage() {
   };
 
   const switchMode = (nextMode: AuthMode) => {
-    if (loading) return;
+    if (loading || resendOtpLoading) return;
     setMode(nextMode);
+    setSignupStep("details");
     setFormError(null);
     setFirstName("");
     setSurname("");
     setConfirmPassword("");
+    setOtpCode("");
     setFieldErrors({});
+  };
+
+  const backToSignupDetails = () => {
+    if (loading || resendOtpLoading) return;
+    setSignupStep("details");
+    setOtpCode("");
+    setFormError(null);
+    setFieldErrors((prev) => ({ ...prev, otp: undefined }));
   };
 
   const onSignupSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -336,24 +375,87 @@ export default function LoginPage() {
         return;
       }
 
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password
-      });
-
-      if (signInError) {
-        setFormError(mapSignInError(signInError.message));
-        return;
-      }
-
-      await registerStaffProfile();
-      toast.success("Account created");
-      router.push("/dashboard");
-      router.refresh();
+      setSignupStep("otp");
+      setOtpCode("");
+      toast.success("Verification code sent to your email");
     } catch {
       setFormError("Unable to create your account right now. Please try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onVerifyOtpSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (loading) return;
+
+    const otpError = validateOtp(otpCode);
+    setFieldErrors((prev) => ({ ...prev, otp: otpError }));
+    setFormError(null);
+
+    if (otpError) return;
+
+    setLoading(true);
+
+    try {
+      const supabase = createClient();
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: email.trim(),
+        token: otpCode.trim(),
+        type: "signup"
+      });
+
+      if (error) {
+        setFormError(mapVerifyOtpError(error.message));
+        return;
+      }
+
+      if (!data.session) {
+        setFormError("Unable to complete registration right now. Please try again.");
+        return;
+      }
+
+      await ensureStaffMemberProfile(supabase, {
+        email: email.trim(),
+        firstName: firstName.trim(),
+        lastName: surname.trim()
+      });
+
+      toast.success("Account verified");
+      setSignupStep("details");
+      setOtpCode("");
+      router.push("/dashboard");
+      router.refresh();
+    } catch {
+      setFormError("Unable to verify your email right now. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onResendOtp = async () => {
+    if (loading || resendOtpLoading) return;
+
+    setResendOtpLoading(true);
+    setFormError(null);
+
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email: email.trim()
+      });
+
+      if (error) {
+        toast.error(mapVerifyOtpError(error.message));
+        return;
+      }
+
+      toast.success("Verification code sent");
+    } catch {
+      toast.error("Unable to resend the verification code right now.");
+    } finally {
+      setResendOtpLoading(false);
     }
   };
 
@@ -362,7 +464,11 @@ export default function LoginPage() {
     if (loading) return;
 
     if (mode === "signup") {
-      await onSignupSubmit(event);
+      if (signupStep === "otp") {
+        await onVerifyOtpSubmit(event);
+      } else {
+        await onSignupSubmit(event);
+      }
       return;
     }
 
@@ -654,16 +760,20 @@ export default function LoginPage() {
           <h1 className="mt-2 text-2xl font-semibold text-foreground">
             {recoveryMode
               ? "Set a new password"
-              : mode === "signin"
-                ? "Sign in to your account"
-                : "Create your account"}
+              : mode === "signup" && signupStep === "otp"
+                ? "Verify your email"
+                : mode === "signin"
+                  ? "Sign in to your account"
+                  : "Create your account"}
           </h1>
           <p className="mt-2 text-sm text-foreground/65">
             {recoveryMode
               ? "Choose a new password for your BuddyAI staff account."
-              : mode === "signin"
-                ? "Access is restricted to authorised BuddyAI staff."
-                : "Enter your details to register for the BuddyAI admin portal."}
+              : mode === "signup" && signupStep === "otp"
+                ? `Enter the 6-digit code sent to ${email.trim() || "your email"}.`
+                : mode === "signin"
+                  ? "Access is restricted to authorised BuddyAI staff."
+                  : "Enter your details to register for the BuddyAI admin portal."}
           </p>
         </div>
 
@@ -685,6 +795,77 @@ export default function LoginPage() {
             </div>
           ) : null}
 
+          {mode === "signup" && signupStep === "otp" ? (
+            <>
+              <div className="space-y-2">
+                <label htmlFor="otp" className="text-sm font-medium text-foreground">
+                  Verification code
+                </label>
+                <Input
+                  id="otp"
+                  name="otp"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  value={otpCode}
+                  onChange={(event) => {
+                    setOtpCode(event.target.value.replace(/\D/g, "").slice(0, 6));
+                    setFieldErrors((prev) => ({ ...prev, otp: undefined }));
+                    setFormError(null);
+                  }}
+                  placeholder="Enter 6-digit code"
+                  aria-invalid={Boolean(fieldErrors.otp)}
+                  aria-describedby={fieldErrors.otp ? "otp-error" : undefined}
+                  disabled={loading || resendOtpLoading}
+                  className={cn(
+                    "text-center text-lg tracking-[0.35em]",
+                    fieldErrors.otp && "border-red-300 focus:border-red-400"
+                  )}
+                />
+                {fieldErrors.otp ? (
+                  <p id="otp-error" className="text-sm text-red-600">
+                    {fieldErrors.otp}
+                  </p>
+                ) : null}
+              </div>
+
+              <Button
+                type="submit"
+                variant="secondary"
+                className="h-11 w-full text-base font-semibold"
+                disabled={loading || resendOtpLoading}
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  "Verify and create account"
+                )}
+              </Button>
+
+              <div className="flex flex-col gap-3 text-center text-sm">
+                <button
+                  type="button"
+                  onClick={() => void onResendOtp()}
+                  disabled={loading || resendOtpLoading}
+                  className="font-medium text-foreground underline-offset-4 transition hover:text-primary hover:underline disabled:opacity-50"
+                >
+                  {resendOtpLoading ? "Sending code..." : "Resend verification code"}
+                </button>
+                <button
+                  type="button"
+                  onClick={backToSignupDetails}
+                  disabled={loading || resendOtpLoading}
+                  className="text-foreground/70 underline-offset-4 transition hover:text-foreground hover:underline disabled:opacity-50"
+                >
+                  Back to registration details
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
           {mode === "signup" ? (
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
@@ -931,7 +1112,7 @@ export default function LoginPage() {
             {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {mode === "signup" ? "Creating account..." : "Signing in..."}
+                {mode === "signup" ? "Sending code..." : "Signing in..."}
               </>
             ) : mode === "signup" ? (
               "Create account"
@@ -940,6 +1121,7 @@ export default function LoginPage() {
             )}
           </Button>
 
+          {mode === "signin" || signupStep === "details" ? (
           <p className="text-center text-sm text-foreground/70">
             {mode === "signin" ? (
               <>
@@ -967,6 +1149,9 @@ export default function LoginPage() {
               </>
             )}
           </p>
+          ) : null}
+            </>
+          )}
         </form>
         )}
       </Card>
